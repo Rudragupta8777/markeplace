@@ -62,8 +62,7 @@ def view_items():
         print("Items available:")
         for item in items:
             item_data = item.to_dict()
-            price = int(item_data['price'])  # Convert price to integer
-            print(f"{item.id}: {item_data['quantity']} available at ₹{price} each.")
+            print(f"{item.id}: {item_data['quantity']} available at ₹{item_data['price']} each.")
 
 def purchase_item(name):
     item_name = input("Enter item name: ")
@@ -90,8 +89,7 @@ def purchase_item(name):
         print("Not enough quantity available.")
         return
     
-    # Convert price to integer
-    total_price = int(item_data['price']) * quantity
+    total_price = item_data['price'] * quantity
     if customer_data['balance'] < total_price:
         print("Insufficient balance.")
         return
@@ -128,7 +126,6 @@ def purchase_item(name):
     
     print(f"Purchased 1 unit of '{item_name}' for ₹{total_price}.")
     print(f"Remaining balance: ₹{customer_data['balance'] - total_price}.")
-
 
 def view_purchases(name):
     # Query Firestore for the customer's purchases

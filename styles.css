@@ -1,0 +1,52 @@
+body {
+    font-family: Arial, sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    margin: 0;
+    /* background-color: #f0f0f0; */
+    background-image: url('/images/Desktop - 5.png');
+    background-size: cover; /* Ensures the image covers the entire viewport */
+    background-position: center; /* Centers the image */
+    background-repeat: no-repeat; /* Prevents repeating the image */
+}
+
+.container {
+    /* background-color: white; */
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 20px 35px rgba(0, 0, 0, 0.5);
+    /* Add some spacing from the edges */
+    max-width: 90vw;
+    max-height: 90vh;
+    overflow-y: auto; /* Allows scrolling if content is too large */
+}
+
+h1 {
+    color: #ffdd57; /* Set color of the heading to yellow */
+}
+
+table {
+    border-collapse: collapse;
+    width: 100%;
+}
+
+th, td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: left;
+}
+
+th {
+    background-color: #f2f2f2;
+    color: #000000; /* Set color of table headers to yellow */
+}
+
+tr:nth-child(even) {
+    background-color: rgba(0, 20px, 35px, 0.5); /* Corrected background color */
+}
+
+td {
+    color: #ffdd57; /* Set color of table data to yellow */
+}
