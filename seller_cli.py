@@ -31,7 +31,7 @@ def add_or_update_approved_buyer():
     
     # Update or add buyer data in Firestore
     update_or_add_buyer(name, balance)
-    print(f"Buyer '{name}' updated with balance ${balance}.")
+    print(f"Buyer '{name}' updated with balance ₹{balance}.")
 
 def update_or_add_buyer(name, balance):
     buyer_ref = db.collection('approved_buyers').document(name)
@@ -48,7 +48,7 @@ def list_item():
 
     item_ref = db.collection('items').document(item_name)
     item_ref.set({'quantity': quantity, 'price': price}, merge=True)
-    print(f"Item '{item_name}' listed with {quantity} units at ${price} each.")
+    print(f"Item '{item_name}' listed with {quantity} units at ₹{price} each.")
 
 def view_items():
     items = db.collection('items').stream()
@@ -58,18 +58,24 @@ def view_items():
         print("Items available:")
         for item in items:
             item_data = item.to_dict()
-            print(f"{item.id}: {item_data['quantity']} available at ${item_data['price']} each.")
+            print(f"{item.id}: {item_data['quantity']} available at ₹{item_data['price']} each.")
 
-def update_quantity():
+def update_item():
     item_name = input("Enter item name: ")
     try:
         quantity = int(input("Enter new quantity: "))
     except ValueError:
         print("Invalid quantity. Please enter a numeric value.")
         return
-
+    try:
+        price = float(input("Enter new price: "))
+    except ValueError:
+        print("Invalid price. Please enter a numeric value.")
+        return
+    
     item_ref = db.collection('items').document(item_name)
     item_ref.update({'quantity': quantity})
+    item_ref.update({'price': price})
     print(f"Updated '{item_name}' to {quantity} units.")
 
 def view_buyers():
@@ -82,7 +88,19 @@ def view_buyers():
     for buyer in buyers:
         buyer_data = buyer.to_dict()
         balance = buyer_data.get('balance', 'N/A')
-        print(f"{buyer.id}: Balance ${balance}.")
+        print(f"Team Name : {buyer.id}, \tBalance ₹{balance}.")
+
+def view_all_purchases():
+    purchases = db.collection('purchases').stream()
+    if not purchases:
+        print("No purchases found.")
+        return
+
+    print("All purchases:")
+    for purchase in purchases:
+        purchase_data = purchase.to_dict()
+        print(f"Customer: {purchase_data['customer']}, \tItem: {purchase_data['item']}, "
+              f"\tQuantity: {purchase_data['quantity']}, \tTotal Price: ₹{purchase_data['total_price']}")
 
 def main():
     while True:
@@ -90,9 +108,10 @@ def main():
         print("1. Add/Update Approved Buyer")
         print("2. List Item")
         print("3. View Items")
-        print("4. Update Quantity")
+        print("4. Update Item")
         print("5. View Approved Buyers")
-        print("6. Exit")
+        print("6. View All Purchases")
+        print("7. Exit")
         
         choice = input("Choose an option: ")
         
@@ -103,10 +122,12 @@ def main():
         elif choice == '3':
             view_items()
         elif choice == '4':
-            update_quantity()
+            update_item()
         elif choice == '5':
             view_buyers()
         elif choice == '6':
+            view_all_purchases()
+        elif choice == '7':
             break
         else:
             print("Invalid choice, please try again.")

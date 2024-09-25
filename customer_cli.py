@@ -1,5 +1,11 @@
 import firebase_admin
 from firebase_admin import credentials, firestore
+from google.cloud.firestore import Query
+
+import warnings
+
+# Suppress UserWarning from Firestore's where() method
+warnings.filterwarnings("ignore", category=UserWarning)
 
 # Embed your Firebase credentials directly in the code
 firebase_credentials = {
@@ -26,10 +32,10 @@ def verify_customer(name):
     doc = customer_ref.get()
     if doc.exists:
         balance = doc.to_dict().get('balance', 0)
-        print(f"Customer '{name}' verified. Balance: ${balance}.")
+        print(f"Customer '{name}' verified. Balance: ₹{balance}.")
         return balance
     else:
-        print(f"Customer '{name}' not found.")
+        # print(f"Customer '{name}' not found.")
         return None
 
 def view_items():
@@ -40,15 +46,11 @@ def view_items():
         print("Items available:")
         for item in items:
             item_data = item.to_dict()
-            print(f"{item.id}: {item_data['quantity']} available at ${item_data['price']} each.")
+            print(f"{item.id}: {item_data['quantity']} available at ₹{item_data['price']} each.")
 
 def purchase_item(name):
     item_name = input("Enter item name: ")
-    try:
-        quantity = int(input("Enter quantity: "))
-    except ValueError:
-        print("Invalid quantity. Please enter a numeric value.")
-        return
+    quantity = 1  # Set quantity to 1
 
     customer_ref = db.collection('approved_buyers').document(name)
     item_ref = db.collection('items').document(item_name)
@@ -81,12 +83,51 @@ def purchase_item(name):
     
     # Update customer balance
     customer_ref.update({'balance': customer_data['balance'] - total_price})
+
+    # Record or update the purchase in Firestore
+    purchase_ref = db.collection('purchases').where('customer', '==', name).where('item', '==', item_name).stream()
     
-    print(f"Purchased {quantity} of '{item_name}' for ${total_price}.")
-    print(f"Remaining balance: ${customer_data['balance'] - total_price}.")
+    purchase_exists = False
+    for purchase in purchase_ref:
+        purchase_data = purchase.to_dict()
+        purchase_doc_ref = purchase.reference
+        new_quantity = purchase_data['quantity'] + quantity
+        new_total_price = purchase_data['total_price'] + total_price
+        purchase_doc_ref.update({
+            'quantity': new_quantity,
+            'total_price': new_total_price
+        })
+        purchase_exists = True
+        break
+
+    if not purchase_exists:
+        db.collection('purchases').add({
+            'customer': name,
+            'item': item_name,
+            'quantity': quantity,
+            'total_price': total_price
+        })
+    
+    print(f"Purchased 1 unit of '{item_name}' for ₹{total_price}.")
+    print(f"Remaining balance: ₹{customer_data['balance'] - total_price}.")
 
 def view_purchases(name):
-    print("Viewing purchases is not implemented yet.")
+    # Query Firestore for the customer's purchases
+
+    purchase_ref = db.collection('purchases') \
+                    .where(field_path='customer', op_string='==', value=name) \
+                    .stream()
+    
+    purchases = list(purchase_ref)
+    
+    if not purchases:
+        print("No purchases found for this customer.")
+        return
+    
+    print("Purchase history:")
+    for purchase in purchases:
+        purchase_data = purchase.to_dict()
+        print(f"Item: {purchase_data['item']}, Quantity: {purchase_data['quantity']}, Total Price: ₹{purchase_data['total_price']}")
 
 def main():
     customer_name = None
@@ -95,13 +136,13 @@ def main():
     while True:
         if customer_name is None:
             # Ask for the name and verify it
-            name = input("Enter your name: ")
+            name = input("Enter your team name: ")
             balance = verify_customer(name)
             if balance is not None:
                 customer_name = name
             else:
-                print("Invalid customer name. Exiting.")
-                break
+                print("Your team is not on the approved list. Contact admin for access.")
+                continue
         else:
             # Show the menu and perform actions
             print("\nCustomer CLI")
@@ -124,3 +165,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+    
