@@ -21,82 +21,106 @@ cred = credentials.Certificate(firebase_credentials)
 firebase_admin.initialize_app(cred)
 db = firestore.client()
 
+def verify_customer(name):
+    customer_ref = db.collection('approved_buyers').document(name)
+    doc = customer_ref.get()
+    if doc.exists:
+        balance = doc.to_dict().get('balance', 0)
+        print(f"Customer '{name}' verified. Balance: ${balance}.")
+        return balance
+    else:
+        print(f"Customer '{name}' not found.")
+        return None
+
 def view_items():
     items = db.collection('items').stream()
     if not items:
         print("No items available.")
     else:
-        print("Items available for purchase:")
+        print("Items available:")
         for item in items:
             item_data = item.to_dict()
-            print(f"{item.id}: {item_data['quantity']} units available at ${item_data['price']} each.")
+            print(f"{item.id}: {item_data['quantity']} available at ${item_data['price']} each.")
 
-def buy_item(item_name, quantity):
-    global customer_balance  # Declare the use of the global variable
-    item_ref = db.collection('items').document(item_name)
-    item = item_ref.get()
-    if not item.exists:
-        print(f"Item '{item_name}' not available.")
+def purchase_item(name):
+    item_name = input("Enter item name: ")
+    try:
+        quantity = int(input("Enter quantity: "))
+    except ValueError:
+        print("Invalid quantity. Please enter a numeric value.")
         return
 
-    item_data = item.to_dict()
-    total_price = item_data['price'] * quantity
+    customer_ref = db.collection('approved_buyers').document(name)
+    item_ref = db.collection('items').document(item_name)
+    
+    customer_doc = customer_ref.get()
+    item_doc = item_ref.get()
+    
+    if not customer_doc.exists:
+        print("Customer not found.")
+        return
+    
+    if not item_doc.exists:
+        print("Item not found.")
+        return
+
+    customer_data = customer_doc.to_dict()
+    item_data = item_doc.to_dict()
     
     if item_data['quantity'] < quantity:
-        print(f"Not enough '{item_name}' in stock.")
-    elif customer_balance < total_price:
+        print("Not enough quantity available.")
+        return
+    
+    total_price = item_data['price'] * quantity
+    if customer_data['balance'] < total_price:
         print("Insufficient balance.")
-    else:
-        # Update Firestore with purchase
-        item_ref.update({'quantity': firestore.Increment(-quantity)})
-        customer_balance -= total_price  # Deduct the total price from the customer's balance
-        print(f"Purchased {quantity} of '{item_name}' for ${total_price}. Remaining balance: ${customer_balance:.2f}.")
+        return
 
-def add_approved_buyer(name):
-    approved_buyers_ref = db.collection('approved_buyers').document(name)
-    approved_buyers_ref.set({
-        'name': name
-    })
-    print(f"Added '{name}' to approved buyers list.")
+    # Update item quantity
+    item_ref.update({'quantity': item_data['quantity'] - quantity})
+    
+    # Update customer balance
+    customer_ref.update({'balance': customer_data['balance'] - total_price})
+    
+    print(f"Purchased {quantity} of '{item_name}' for ${total_price}.")
+    print(f"Remaining balance: ${customer_data['balance'] - total_price}.")
 
-def view_balance(name):
-    approved_buyers_ref = db.collection('approved_buyers').document(name)
-    buyer = approved_buyers_ref.get()
-    if buyer.exists:
-        data = buyer.to_dict()
-        balance = data.get('balance')  # Safely get the balance field
-        if balance is not None:
-            print(f"Balance for '{name}': ${balance:.2f}")
-        else:
-            print(f"Balance field not found for '{name}'.")
-    else:
-        print(f"Approved buyer '{name}' not found.")
-
+def view_purchases(name):
+    print("Viewing purchases is not implemented yet.")
 
 def main():
-    name = input("Enter your name: ")
-    add_approved_buyer(name)  # Ensure the customer is an approved buyer
-    
+    customer_name = None
+    balance = 0
+
     while True:
-        print("\nCustomer CLI")
-        print("1. View Items")
-        print("2. Buy Item")
-        print("3. View Balance")
-        print("4. Exit")
-        choice = input("Choose an option: ")
-        
-        if choice == '1':
-            view_items()
-        elif choice == '2':
-            item_name = input("Enter item name to buy: ")
-            quantity = int(input("Enter quantity to buy: "))
-            buy_item(item_name, quantity)
-        elif choice == '3':
-            view_balance(name)
-        elif choice == '4':
-            break
+        if customer_name is None:
+            # Ask for the name and verify it
+            name = input("Enter your name: ")
+            balance = verify_customer(name)
+            if balance is not None:
+                customer_name = name
+            else:
+                print("Invalid customer name. Exiting.")
+                break
         else:
-            print("Invalid choice, please try again.")
+            # Show the menu and perform actions
+            print("\nCustomer CLI")
+            print("1. View Items")
+            print("2. Purchase Item")
+            print("3. View Purchases")
+            print("4. Exit")
+            choice = input("Choose an option: ")
+
+            if choice == '1':
+                view_items()
+            elif choice == '2':
+                purchase_item(customer_name)
+            elif choice == '3':
+                view_purchases(customer_name)
+            elif choice == '4':
+                break
+            else:
+                print("Invalid choice, please try again.")
 
 if __name__ == "__main__":
     main()

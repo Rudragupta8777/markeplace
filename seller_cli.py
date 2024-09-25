@@ -21,25 +21,33 @@ cred = credentials.Certificate(firebase_credentials)
 firebase_admin.initialize_app(cred)
 db = firestore.client()
 
-def check_approved_buyer(name):
-    approved_buyers_ref = db.collection('approved_buyers').document(name)
-    return approved_buyers_ref.get().exists
+def add_or_update_approved_buyer():
+    name = input("Enter the buyer's name: ")
+    try:
+        balance = float(input("Enter the buyer's balance: "))
+    except ValueError:
+        print("Invalid balance. Please enter a numeric value.")
+        return
+    
+    # Update or add buyer data in Firestore
+    update_or_add_buyer(name, balance)
+    print(f"Buyer '{name}' updated with balance ${balance}.")
 
-def add_or_update_approved_buyer(name, balance):
-    approved_buyers_ref = db.collection('approved_buyers').document(name)
-    approved_buyers_ref.set({
-        'name': name,
-        'balance': balance
-    }, merge=True)  # Merge to avoid overwriting other fields
-    print(f"Added/Updated '{name}' with balance ${balance}.")
+def update_or_add_buyer(name, balance):
+    buyer_ref = db.collection('approved_buyers').document(name)
+    buyer_ref.set({'balance': balance}, merge=True)
 
+def list_item():
+    item_name = input("Enter item name: ")
+    try:
+        quantity = int(input("Enter quantity: "))
+        price = float(input("Enter price: "))
+    except ValueError:
+        print("Invalid quantity or price. Please enter numeric values.")
+        return
 
-def list_item(item_name, quantity, price):
     item_ref = db.collection('items').document(item_name)
-    item_ref.set({
-        'quantity': quantity,
-        'price': price
-    })
+    item_ref.set({'quantity': quantity, 'price': price}, merge=True)
     print(f"Item '{item_name}' listed with {quantity} units at ${price} each.")
 
 def view_items():
@@ -52,10 +60,29 @@ def view_items():
             item_data = item.to_dict()
             print(f"{item.id}: {item_data['quantity']} available at ${item_data['price']} each.")
 
-def update_quantity(item_name, quantity):
+def update_quantity():
+    item_name = input("Enter item name: ")
+    try:
+        quantity = int(input("Enter new quantity: "))
+    except ValueError:
+        print("Invalid quantity. Please enter a numeric value.")
+        return
+
     item_ref = db.collection('items').document(item_name)
     item_ref.update({'quantity': quantity})
     print(f"Updated '{item_name}' to {quantity} units.")
+
+def view_buyers():
+    buyers = db.collection('approved_buyers').stream()
+    if not buyers:
+        print("No approved buyers found.")
+        return
+
+    print("Approved buyers:")
+    for buyer in buyers:
+        buyer_data = buyer.to_dict()
+        balance = buyer_data.get('balance', 'N/A')
+        print(f"{buyer.id}: Balance ${balance}.")
 
 def main():
     while True:
@@ -64,25 +91,22 @@ def main():
         print("2. List Item")
         print("3. View Items")
         print("4. Update Quantity")
-        print("5. Exit")
+        print("5. View Approved Buyers")
+        print("6. Exit")
+        
         choice = input("Choose an option: ")
         
         if choice == '1':
-            name = input("Enter buyer name: ")
-            balance = float(input("Enter current balance: "))
-            add_or_update_approved_buyer(name, balance)
+            add_or_update_approved_buyer()
         elif choice == '2':
-            item_name = input("Enter item name: ")
-            quantity = int(input("Enter item quantity: "))
-            price = float(input("Enter item price: "))
-            list_item(item_name, quantity, price)
+            list_item()
         elif choice == '3':
             view_items()
         elif choice == '4':
-            item_name = input("Enter item name to update: ")
-            quantity = int(input("Enter new quantity: "))
-            update_quantity(item_name, quantity)
+            update_quantity()
         elif choice == '5':
+            view_buyers()
+        elif choice == '6':
             break
         else:
             print("Invalid choice, please try again.")
