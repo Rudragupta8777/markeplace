@@ -31,13 +31,29 @@ def verify_customer(name):
     customer_ref = db.collection('approved_buyers').document(name)
     doc = customer_ref.get()
     if doc.exists:
-        balance = doc.to_dict().get('balance', 0)
-        print(f"Customer '{name}' verified. Balance: ₹{balance}.")
-        return balance
+        # Check if password exists
+        password_ref = db.collection('buyer_passwords').document(name)
+        password_doc = password_ref.get()
+        if password_doc.exists:
+            while True:
+                password = input("Enter your password: ")
+                if password == password_doc.to_dict()['password']:
+                    balance = doc.to_dict().get('balance', 0)
+                    print(f"Customer '{name}' verified. Balance: ₹{balance}.")
+                    return balance
+                else:
+                    print("Invalid password. Please try again.")
+        else:
+            # First-time login, create password
+            password = input("Create a password: ")
+            password_ref.set({'password': password})
+            balance = doc.to_dict().get('balance', 0)
+            print(f"Customer '{name}' verified. Balance: ₹{balance}.")
+            return balance
     else:
-        # print(f"Customer '{name}' not found.")
+        print(f"Customer '{name}' not found.")
         return None
-
+    
 def view_items():
     items = db.collection('items').stream()
     if not items:
@@ -46,7 +62,8 @@ def view_items():
         print("Items available:")
         for item in items:
             item_data = item.to_dict()
-            print(f"{item.id}: {item_data['quantity']} available at ₹{item_data['price']} each.")
+            price = int(item_data['price'])  # Convert price to integer
+            print(f"{item.id}: {item_data['quantity']} available at ₹{price} each.")
 
 def purchase_item(name):
     item_name = input("Enter item name: ")
@@ -73,7 +90,8 @@ def purchase_item(name):
         print("Not enough quantity available.")
         return
     
-    total_price = item_data['price'] * quantity
+    # Convert price to integer
+    total_price = int(item_data['price']) * quantity
     if customer_data['balance'] < total_price:
         print("Insufficient balance.")
         return
@@ -111,6 +129,7 @@ def purchase_item(name):
     print(f"Purchased 1 unit of '{item_name}' for ₹{total_price}.")
     print(f"Remaining balance: ₹{customer_data['balance'] - total_price}.")
 
+
 def view_purchases(name):
     # Query Firestore for the customer's purchases
 
@@ -128,6 +147,17 @@ def view_purchases(name):
     for purchase in purchases:
         purchase_data = purchase.to_dict()
         print(f"Item: {purchase_data['item']}, Quantity: {purchase_data['quantity']}, Total Price: ₹{purchase_data['total_price']}")
+
+def check_balance(name):
+    customer_ref = db.collection('approved_buyers').document(name)
+    doc = customer_ref.get()
+    if doc.exists:
+        balance = doc.to_dict().get('balance', 0)
+        print(f"Your current balance is: ₹{balance}.")
+    else:
+        print(f"Customer '{name}' not found.")
+
+# ... (rest of the code remains the same)
 
 def main():
     customer_name = None
@@ -149,7 +179,8 @@ def main():
             print("1. View Items")
             print("2. Purchase Item")
             print("3. View Purchases")
-            print("4. Exit")
+            print("4. Check Balance")
+            print("5. Exit")
             choice = input("Choose an option: ")
 
             if choice == '1':
@@ -159,11 +190,11 @@ def main():
             elif choice == '3':
                 view_purchases(customer_name)
             elif choice == '4':
+                check_balance(customer_name)
+            elif choice == '5':
                 break
             else:
                 print("Invalid choice, please try again.")
 
 if __name__ == "__main__":
     main()
-
-    
