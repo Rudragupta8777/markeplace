@@ -1,0 +1,10 @@
+{
+    "era": {
+        "quantity": 12,
+        "price": 50.0
+    },
+    "era1": {
+        "quantity": 21,
+        "price": 100.0
+    }
+}
