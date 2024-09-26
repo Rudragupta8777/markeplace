@@ -28,6 +28,14 @@ cred = credentials.Certificate(firebase_credentials)
 firebase_admin.initialize_app(cred)
 db = firestore.client()
 
+def check_marketplace_status():
+    status_ref = db.collection('marketplace_status').document('status')
+    status_doc = status_ref.get()
+    
+    if status_doc.exists:
+        return status_doc.to_dict().get('is_active', True)
+    return True  # Default to active if status document doesn't exist
+
 def verify_customer(name):
     customer_ref = db.collection('approved_buyers').document(name)
     doc = customer_ref.get()
@@ -40,7 +48,7 @@ def verify_customer(name):
                 password = input(Fore.CYAN + "Enter your password: " + Style.RESET_ALL)
                 if password == password_doc.to_dict()['password']:
                     balance = doc.to_dict().get('balance', 0)
-                    print(f"{Fore.GREEN}Customer{Style.RESET_ALL} {name} {Fore.GREEN}verified. Balance:{Style.RESET_ALL} ₹{balance}.")
+                    print(f"{Fore.GREEN}Customer{Style.RESET_ALL} {name} {Fore.GREEN}verified. Balance:{Style.RESET_ALL} {balance}TOS.")
                     return balance
                 else:
                     print_colored("Invalid password. Please try again.", Fore.RED)
@@ -49,13 +57,16 @@ def verify_customer(name):
             password = input(Fore.CYAN + "Create a password: " + Style.RESET_ALL)
             password_ref.set({'password': password})
             balance = doc.to_dict().get('balance', 0)
-            print(f"{Fore.GREEN}Customer{Style.RESET_ALL} {name} {Fore.GREEN}verified. Balance:{Style.RESET_ALL} ₹{balance}.")
+            print(f"{Fore.GREEN}Customer{Style.RESET_ALL} {name} {Fore.GREEN}verified. Balance:{Style.RESET_ALL} {balance}TOS.")
             return balance
     else:
         print_colored(f"Customer '{name}' not found.", Fore.RED)
         return None
     
 def view_items():
+    if not check_marketplace_status():
+        print_colored("The marketplace is currently closed. Please try again later.", Fore.YELLOW)
+        return {}
     items = db.collection('items').stream()
     if not items:
         print_colored("No items available.", Fore.YELLOW)
@@ -70,10 +81,13 @@ def view_items():
                 'quantity': item_data['quantity'],
                 'price': item_data['price']
             }
-            print_colored(f"{index}. {Fore.GREEN}\tItem name:{Style.RESET_ALL} {item.id}{Fore.GREEN},\tQuantity:{Style.RESET_ALL} {item_data['quantity']}{Fore.GREEN},\tPrice: {Style.RESET_ALL}₹{item_data['price']} each.")
+            print_colored(f"{index}. {Fore.GREEN}\tItem name:{Style.RESET_ALL} {item.id}{Fore.GREEN},\tQuantity:{Style.RESET_ALL} {item_data['quantity']}{Fore.GREEN},\tPrice: {Style.RESET_ALL}{item_data['price']}TOS each.")
         return item_dict
 
 def purchase_item(name):
+    if not check_marketplace_status():
+        print_colored("The marketplace is currently closed. Purchases are not allowed at this time.", Fore.YELLOW)
+        return
     item_dict = view_items()
     if not item_dict:
         return
@@ -147,8 +161,8 @@ def purchase_item(name):
             'total_price': total_price
         })
     
-    print_colored(f"{Fore.GREEN}Purchased 1 unit of{Style.RESET_ALL} '{item_name}' {Fore.GREEN}for{Style.RESET_ALL} ₹{total_price}.")
-    print_colored(f"{Fore.YELLOW}Remaining balance:{Style.RESET_ALL} ₹{customer_data['balance'] - total_price}.")
+    print_colored(f"{Fore.GREEN}Purchased 1 unit of{Style.RESET_ALL} '{item_name}' {Fore.GREEN}for{Style.RESET_ALL} {total_price}TOS.")
+    print_colored(f"{Fore.YELLOW}Remaining balance:{Style.RESET_ALL} {customer_data['balance'] - total_price}TOS.")
 
 def view_purchases(name):
     # Query Firestore for the customer's purchases
@@ -166,14 +180,14 @@ def view_purchases(name):
     print_colored("Purchase history:", Fore.GREEN)
     for purchase in purchases:
         purchase_data = purchase.to_dict()
-        print(f"{Fore.GREEN}Item:{Style.RESET_ALL} {purchase_data['item']}{Fore.GREEN},\tQuantity:{Style.RESET_ALL} {purchase_data['quantity']}{Fore.GREEN},\tTotal Price:{Style.RESET_ALL} ₹{purchase_data['total_price']}")
+        print(f"{Fore.GREEN}Item:{Style.RESET_ALL} {purchase_data['item']}{Fore.GREEN},\tQuantity:{Style.RESET_ALL} {purchase_data['quantity']}{Fore.GREEN},\tTotal Price:{Style.RESET_ALL} {purchase_data['total_price']}TOS")
 
 def check_balance(name):
     customer_ref = db.collection('approved_buyers').document(name)
     doc = customer_ref.get()
     if doc.exists:
         balance = doc.to_dict().get('balance', 0)
-        print_colored(f"{Fore.GREEN}Your current balance is:{Style.RESET_ALL} ₹{balance}.")
+        print_colored(f"{Fore.GREEN}Your current balance is:{Style.RESET_ALL} {balance}TOS.")
     else:
         print_colored(f"Customer '{name}' not found.", Fore.RED)
 
@@ -181,7 +195,19 @@ def check_balance(name):
 def print_colored(text, color=Fore.WHITE, style=Style.NORMAL):
     print(f"{style}{color}{text}{Style.RESET_ALL}")
 
+def marketplace_logo():
+    print_colored('''
+          
+          ███╗   ███╗ █████╗ ██████╗ ██╗  ██╗███████╗████████╗██████╗ ██╗      █████╗  ██████╗███████╗
+          ████╗ ████║██╔══██╗██╔══██╗██║ ██╔╝██╔════╝╚══██╔══╝██╔══██╗██║     ██╔══██╗██╔════╝██╔════╝
+          ██╔████╔██║███████║██████╔╝█████╔╝ █████╗     ██║   ██████╔╝██║     ███████║██║     █████╗  
+          ██║╚██╔╝██║██╔══██║██╔══██╗██╔═██╗ ██╔══╝     ██║   ██╔═══╝ ██║     ██╔══██║██║     ██╔══╝  
+          ██║ ╚═╝ ██║██║  ██║██║  ██║██║  ██╗███████╗   ██║   ██║     ███████╗██║  ██║╚██████╗███████╗
+          ╚═╝     ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝   ╚═╝   ╚═╝     ╚══════╝╚═╝  ╚═╝ ╚═════╝╚══════╝
+                                                                                                      ''', Fore.YELLOW)
+
 def main():
+    marketplace_logo()
     customer_name = None
     balance = 0
 

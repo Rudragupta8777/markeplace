@@ -33,7 +33,7 @@ def add_or_update_approved_buyer():
     
     # Update or add buyer data in Firestore
     update_or_add_buyer(name, balance)
-    print(f"Buyer '{name}' updated with balance ₹{balance}.")
+    print(f"Buyer '{name}' updated with balance {balance}TOS.")
 
 def update_or_add_buyer(name, balance):
     buyer_ref = db.collection('approved_buyers').document(name)
@@ -50,7 +50,7 @@ def list_item():
 
     item_ref = db.collection('items').document(item_name)
     item_ref.set({'quantity': quantity, 'price': price}, merge=True)
-    print(f"Item '{item_name}' listed with {quantity} units at ₹{price} each.")
+    print(f"Item '{item_name}' listed with {quantity} units at {price}TOS each.")
 
 def view_items():
     items = db.collection('items').stream()
@@ -60,7 +60,7 @@ def view_items():
         print("Items available:")
         for item in items:
             item_data = item.to_dict()
-            print(f"{item.id}: {item_data['quantity']} available at ₹{item_data['price']} each.")
+            print(f"{item.id}: {item_data['quantity']} available at {item_data['price']}TOS each.")
 
 def update_item():
     item_name = input("Enter item name: ")
@@ -90,7 +90,7 @@ def view_buyers():
     for buyer in buyers:
         buyer_data = buyer.to_dict()
         balance = buyer_data.get('balance', 'N/A')
-        print(f"Team Name : {buyer.id}, \tBalance : ₹{balance}.")
+        print(f"Team Name : {buyer.id}, \tBalance : {balance}TOS.")
 
 def view_all_purchases():
     purchases = db.collection('purchases').stream()
@@ -102,12 +102,40 @@ def view_all_purchases():
     for purchase in purchases:
         purchase_data = purchase.to_dict()
         print(f"Customer: {purchase_data['customer']}, \tItem: {purchase_data['item']}, "
-              f"\tQuantity: {purchase_data['quantity']}, \tTotal Price: ₹{purchase_data['total_price']}")
+              f"\tQuantity: {purchase_data['quantity']}, \tTotal Price: {purchase_data['total_price']}TOS")
 
 def print_colored(text, color=Fore.WHITE, style=Style.NORMAL):
     print(f"{style}{color}{text}{Style.RESET_ALL}")
 
+def toggle_marketplace_status():
+    status_ref = db.collection('marketplace_status').document('status')
+    status_doc = status_ref.get()
+    
+    if status_doc.exists:
+        current_status = status_doc.to_dict().get('is_active', True)
+        new_status = not current_status
+    else:
+        new_status = False
+    
+    status_ref.set({'is_active': new_status})
+    
+    if new_status:
+        print_colored("Marketplace has been started. Customers can now make transactions.", Fore.GREEN)
+    else:
+        print_colored("Marketplace has been stopped. Customers cannot make transactions.", Fore.YELLOW)
+
+def Iste_logo():
+    print_colored('''
+                ██╗ ███████╗ ████████╗ ███████╗
+                ██║ ██╔════╝ ╚══██╔══╝ ██╔════╝
+                ██║ ███████╗    ██║    █████╗  
+                ██║ ╚════██║    ██║    ██╔══╝  
+                ██║ ███████║    ██║    ███████╗
+                ╚═╝ ╚══════╝    ╚═╝    ╚══════╝
+                                             ''')
+
 def main():
+    Iste_logo()
     while True:
         print(Fore.CYAN + "\nSeller CLI" + Style.RESET_ALL)
         print("1. Add/Update Approved Buyer")
@@ -116,7 +144,8 @@ def main():
         print("4. Update Item")
         print("5. View Approved Buyers")
         print("6. View All Purchases")
-        print("7. Exit")
+        print("7. Toggle Marketplace Status")
+        print("8. Exit")
         
         choice = input(Fore.CYAN + "Choose an option: " + Style.RESET_ALL)
         
@@ -133,6 +162,8 @@ def main():
         elif choice == '6':
             view_all_purchases()
         elif choice == '7':
+            toggle_marketplace_status()
+        elif choice == '8':
             break
         else:
             print_colored("Invalid choice, please try again.", Fore.RED)
