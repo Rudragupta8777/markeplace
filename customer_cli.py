@@ -1,9 +1,10 @@
 import firebase_admin
 from firebase_admin import credentials, firestore
 from google.cloud.firestore import Query
+from colorama import init, Fore, Style
 
 import warnings
-
+init(autoreset=True)
 # Suppress UserWarning from Firestore's where() method
 warnings.filterwarnings("ignore", category=UserWarning)
 
@@ -36,36 +37,58 @@ def verify_customer(name):
         password_doc = password_ref.get()
         if password_doc.exists:
             while True:
-                password = input("Enter your password: ")
+                password = input(Fore.CYAN + "Enter your password: " + Style.RESET_ALL)
                 if password == password_doc.to_dict()['password']:
                     balance = doc.to_dict().get('balance', 0)
-                    print(f"Customer '{name}' verified. Balance: ₹{balance}.")
+                    print(f"{Fore.GREEN}Customer{Style.RESET_ALL} {name} {Fore.GREEN}verified. Balance:{Style.RESET_ALL} ₹{balance}.")
                     return balance
                 else:
-                    print("Invalid password. Please try again.")
+                    print_colored("Invalid password. Please try again.", Fore.RED)
         else:
             # First-time login, create password
-            password = input("Create a password: ")
+            password = input(Fore.CYAN + "Create a password: " + Style.RESET_ALL)
             password_ref.set({'password': password})
             balance = doc.to_dict().get('balance', 0)
-            print(f"Customer '{name}' verified. Balance: ₹{balance}.")
+            print(f"{Fore.GREEN}Customer{Style.RESET_ALL} {name} {Fore.GREEN}verified. Balance:{Style.RESET_ALL} ₹{balance}.")
             return balance
     else:
-        print(f"Customer '{name}' not found.")
+        print_colored(f"Customer '{name}' not found.", Fore.RED)
         return None
     
 def view_items():
     items = db.collection('items').stream()
     if not items:
-        print("No items available.")
+        print_colored("No items available.", Fore.YELLOW)
+        return {}
     else:
-        print("Items available:")
-        for item in items:
+        print_colored("Items available:", Fore.CYAN, Style.BRIGHT)
+        item_dict = {}
+        for index, item in enumerate(items, start=1):
             item_data = item.to_dict()
-            print(f"{item.id}: {item_data['quantity']} available at ₹{item_data['price']} each.")
+            item_dict[index] = {
+                'name': item.id,
+                'quantity': item_data['quantity'],
+                'price': item_data['price']
+            }
+            print_colored(f"{index}. {Fore.GREEN}\tItem name:{Style.RESET_ALL} {item.id}{Fore.GREEN},\tQuantity:{Style.RESET_ALL} {item_data['quantity']}{Fore.GREEN},\tPrice: {Style.RESET_ALL}₹{item_data['price']} each.")
+        return item_dict
 
 def purchase_item(name):
-    item_name = input("Enter item name: ")
+    item_dict = view_items()
+    if not item_dict:
+        return
+
+    while True:
+        try:
+            serial_no = int(input(Fore.CYAN + "Enter the serial number of the item you want to purchase: " + Style.RESET_ALL))
+            if serial_no not in item_dict:
+                print_colored("Invalid serial number. Please try again.", Fore.RED)
+                continue
+            break
+        except ValueError:
+            print_colored("Please enter a valid number.", Fore.RED)
+
+    item_name = item_dict[serial_no]['name']
     quantity = 1  # Set quantity to 1
 
     customer_ref = db.collection('approved_buyers').document(name)
@@ -75,23 +98,23 @@ def purchase_item(name):
     item_doc = item_ref.get()
     
     if not customer_doc.exists:
-        print("Customer not found.")
+        print_colored("Customer not found.", Fore.RED)
         return
     
     if not item_doc.exists:
-        print("Item not found.")
+        print_colored("Item not found.", Fore.RED)
         return
 
     customer_data = customer_doc.to_dict()
     item_data = item_doc.to_dict()
     
     if item_data['quantity'] < quantity:
-        print("Not enough quantity available.")
+        print_colored("Not enough quantity available.", Fore.RED)
         return
     
     total_price = item_data['price'] * quantity
     if customer_data['balance'] < total_price:
-        print("Insufficient balance.")
+        print_colored("Insufficient balance.", Fore.RED)
         return
 
     # Update item quantity
@@ -124,8 +147,8 @@ def purchase_item(name):
             'total_price': total_price
         })
     
-    print(f"Purchased 1 unit of '{item_name}' for ₹{total_price}.")
-    print(f"Remaining balance: ₹{customer_data['balance'] - total_price}.")
+    print_colored(f"{Fore.GREEN}Purchased 1 unit of{Style.RESET_ALL} '{item_name}' {Fore.GREEN}for{Style.RESET_ALL} ₹{total_price}.")
+    print_colored(f"{Fore.YELLOW}Remaining balance:{Style.RESET_ALL} ₹{customer_data['balance'] - total_price}.")
 
 def view_purchases(name):
     # Query Firestore for the customer's purchases
@@ -137,24 +160,26 @@ def view_purchases(name):
     purchases = list(purchase_ref)
     
     if not purchases:
-        print("No purchases found for this customer.")
+        print_colored("No purchases found for this customer.", Fore.RED)
         return
     
-    print("Purchase history:")
+    print_colored("Purchase history:", Fore.GREEN)
     for purchase in purchases:
         purchase_data = purchase.to_dict()
-        print(f"Item: {purchase_data['item']}, Quantity: {purchase_data['quantity']}, Total Price: ₹{purchase_data['total_price']}")
+        print(f"{Fore.GREEN}Item:{Style.RESET_ALL} {purchase_data['item']}{Fore.GREEN},\tQuantity:{Style.RESET_ALL} {purchase_data['quantity']}{Fore.GREEN},\tTotal Price:{Style.RESET_ALL} ₹{purchase_data['total_price']}")
 
 def check_balance(name):
     customer_ref = db.collection('approved_buyers').document(name)
     doc = customer_ref.get()
     if doc.exists:
         balance = doc.to_dict().get('balance', 0)
-        print(f"Your current balance is: ₹{balance}.")
+        print_colored(f"{Fore.GREEN}Your current balance is:{Style.RESET_ALL} ₹{balance}.")
     else:
-        print(f"Customer '{name}' not found.")
+        print_colored(f"Customer '{name}' not found.", Fore.RED)
 
 # ... (rest of the code remains the same)
+def print_colored(text, color=Fore.WHITE, style=Style.NORMAL):
+    print(f"{style}{color}{text}{Style.RESET_ALL}")
 
 def main():
     customer_name = None
@@ -163,22 +188,22 @@ def main():
     while True:
         if customer_name is None:
             # Ask for the name and verify it
-            name = input("Enter your team name: ")
+            name = input(Fore.CYAN + "Enter your team name: " + Style.RESET_ALL)
             balance = verify_customer(name)
             if balance is not None:
                 customer_name = name
             else:
-                print("Your team is not on the approved list. Contact admin for access.")
+                print_colored("Your team is not on the approved list. Contact admin for access.", Fore.RED)
                 continue
         else:
             # Show the menu and perform actions
-            print("\nCustomer CLI")
+            print_colored("\nCustomer CLI", Fore.CYAN, Style.BRIGHT)
             print("1. View Items")
             print("2. Purchase Item")
             print("3. View Purchases")
             print("4. Check Balance")
-            print("5. Exit")
-            choice = input("Choose an option: ")
+            print("5. Exit\n")
+            choice = input(Fore.CYAN + "Choose an option: " + Style.RESET_ALL)
 
             if choice == '1':
                 view_items()
@@ -191,7 +216,7 @@ def main():
             elif choice == '5':
                 break
             else:
-                print("Invalid choice, please try again.")
+                print_colored("Invalid choice, please try again.", Fore.RED)
 
 if __name__ == "__main__":
     main()

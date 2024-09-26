@@ -1,5 +1,6 @@
 import firebase_admin
 from firebase_admin import credentials, firestore
+from colorama import init, Fore, Style
 
 # Embed your Firebase credentials directly in the code
 firebase_credentials = {
@@ -17,6 +18,7 @@ firebase_credentials = {
 }
 
 # Initialize Firebase
+init(autoreset=True)
 cred = credentials.Certificate(firebase_credentials)
 firebase_admin.initialize_app(cred)
 db = firestore.client()
@@ -65,12 +67,12 @@ def update_item():
     try:
         quantity = int(input("Enter new quantity: "))
     except ValueError:
-        print("Invalid quantity. Please enter a numeric value.")
+        print_colored("Invalid quantity. Please enter a numeric value.", Fore.RED)
         return
     try:
-        price = float(input("Enter new price: "))
+        price = float(input(Fore.CYAN + "Enter new price: " + Style.RESET_ALL))
     except ValueError:
-        print("Invalid price. Please enter a numeric value.")
+        print_colored("Invalid price. Please enter a numeric value.", Fore.RED)
         return
     
     item_ref = db.collection('items').document(item_name)
@@ -81,19 +83,19 @@ def update_item():
 def view_buyers():
     buyers = db.collection('approved_buyers').stream()
     if not buyers:
-        print("No approved buyers found.")
+        print_colored("No approved buyers found.", Fore.RED)
         return
 
-    print("Approved buyers:")
+    print(Fore.CYAN + "Approved buyers:" + Style.RESET_ALL)
     for buyer in buyers:
         buyer_data = buyer.to_dict()
         balance = buyer_data.get('balance', 'N/A')
-        print(f"Team Name : {buyer.id}, \tBalance ₹{balance}.")
+        print(f"Team Name : {buyer.id}, \tBalance : ₹{balance}.")
 
 def view_all_purchases():
     purchases = db.collection('purchases').stream()
     if not purchases:
-        print("No purchases found.")
+        print_colored("No purchases found.", Fore.RED)
         return
 
     print("All purchases:")
@@ -102,9 +104,12 @@ def view_all_purchases():
         print(f"Customer: {purchase_data['customer']}, \tItem: {purchase_data['item']}, "
               f"\tQuantity: {purchase_data['quantity']}, \tTotal Price: ₹{purchase_data['total_price']}")
 
+def print_colored(text, color=Fore.WHITE, style=Style.NORMAL):
+    print(f"{style}{color}{text}{Style.RESET_ALL}")
+
 def main():
     while True:
-        print("\nSeller CLI")
+        print(Fore.CYAN + "\nSeller CLI" + Style.RESET_ALL)
         print("1. Add/Update Approved Buyer")
         print("2. List Item")
         print("3. View Items")
@@ -113,7 +118,7 @@ def main():
         print("6. View All Purchases")
         print("7. Exit")
         
-        choice = input("Choose an option: ")
+        choice = input(Fore.CYAN + "Choose an option: " + Style.RESET_ALL)
         
         if choice == '1':
             add_or_update_approved_buyer()
@@ -130,7 +135,7 @@ def main():
         elif choice == '7':
             break
         else:
-            print("Invalid choice, please try again.")
+            print_colored("Invalid choice, please try again.", Fore.RED)
 
 if __name__ == "__main__":
     main()
