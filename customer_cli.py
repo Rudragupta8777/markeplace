@@ -29,11 +29,17 @@ firebase_admin.initialize_app(cred)
 db = firestore.client()
 
 def check_marketplace_status(team_name):
-    status_ref = db.collection('marketplace_status').document(team_name)
-    status_doc = status_ref.get()
+    global_status_ref = db.collection('marketplace_status').document('global')
+    global_status_doc = global_status_ref.get()
     
-    if status_doc.exists:
-        return status_doc.to_dict().get('is_active', True)
+    if global_status_doc.exists and not global_status_doc.to_dict().get('is_active', True):
+        return False
+    
+    team_status_ref = db.collection('marketplace_status').document(team_name)
+    team_status_doc = team_status_ref.get()
+    
+    if team_status_doc.exists:
+        return team_status_doc.to_dict().get('is_active', True)
     return True  # Default to active if status document doesn't exist
 
 def verify_customer(name):
@@ -217,13 +223,15 @@ def view_sabotage_options():
             print_colored("Please enter a valid number.", Fore.RED)
 
 def perform_sabotage(customer_name):
-    option = view_sabotage_options()
-    if not option:
+    # Get the sabotage cost
+    sabotage_cost_doc = db.collection('game_settings').document('sabotage').get()
+    if not sabotage_cost_doc.exists:
+        print_colored("Sabotage cost not set. Please contact the administrator.", Fore.RED)
         return
-
-    option_data = option.to_dict()
-    cost = option_data['cost']
-
+    
+    sabotage_cost = sabotage_cost_doc.to_dict()['cost']
+    print_colored(f"The cost for sabotage is {sabotage_cost} TOS.", Fore.GREEN)
+    
     target_team = input(Fore.CYAN + "Enter the team name you want to sabotage: " + Style.RESET_ALL)
     
     # Check if the target team exists
@@ -239,33 +247,33 @@ def perform_sabotage(customer_name):
         print_colored("Customer not found.", Fore.RED)
         return
 
-    customer_data = customer_doc.to_dict()
-    balance = customer_data.get('balance', 0)
-
-    if balance < cost:
-        print_colored(f"Insufficient balance. You need {cost} TOS for this sabotage.", Fore.RED)
+    # Check if the customer has enough balance
+    customer_balance = customer_doc.to_dict()['balance']
+    if customer_balance < sabotage_cost:
+        print_colored(f"Insufficient balance. Sabotage costs {sabotage_cost} TOS, but you only have {customer_balance} TOS.", Fore.RED)
         return
 
-    # Deduct the cost from the customer's balance
-    new_balance = balance - cost
+    # Deduct the sabotage cost from the customer's balance
+    new_balance = customer_balance - sabotage_cost
     customer_ref.update({'balance': new_balance})
 
     # Record the sabotage attempt
     db.collection('sabotage_attempts').add({
         'customer': customer_name,
         'target_team': target_team,
-        'sabotage_option': option_data['name'],
-        'cost': cost,
         'timestamp': firestore.SERVER_TIMESTAMP,
-        'status': 'active'
+        'status': 'active',
+        'cost': sabotage_cost
     })
 
     # Disable the target team's marketplace access
     db.collection('marketplace_status').document(target_team).set({'is_active': False})
 
-    print_colored(f"Sabotage '{option_data['name']}' initiated against team '{target_team}'. {cost} TOS deducted from your balance.", Fore.GREEN)
-    print_colored(f"New balance: {new_balance} TOS", Fore.YELLOW)
-    print_colored("Please contact tech support to complete the sabotage action.", Fore.CYAN)
+    print_colored(f"Sabotage initiated against team '{target_team}'.", Fore.GREEN)
+    print_colored(f"You have been charged {sabotage_cost} TOS. Your new balance is {new_balance} TOS.", Fore.YELLOW)
+    print_colored("The team's marketplace access has been disabled.", Fore.YELLOW)
+    print_colored("Please contact tech support to complete further actions.", Fore.CYAN)
+
 
 def view_sabotage_attempts():
     attempts = db.collection('sabotage_attempts').order_by('timestamp', direction=Query.DESCENDING).stream()

@@ -114,16 +114,27 @@ def print_colored(text, color=Fore.WHITE, style=Style.NORMAL):
     print(f"{style}{color}{text}{Style.RESET_ALL}")
 
 def toggle_marketplace_status():
-    status_ref = db.collection('marketplace_status').document('status')
-    status_doc = status_ref.get()
+    # Get all approved buyers (teams)
+    buyers_ref = db.collection('approved_buyers').stream()
     
-    if status_doc.exists:
-        current_status = status_doc.to_dict().get('is_active', True)
+    # Get the current global status
+    global_status_ref = db.collection('marketplace_status').document('global')
+    global_status_doc = global_status_ref.get()
+    
+    if global_status_doc.exists:
+        current_status = global_status_doc.to_dict().get('is_active', True)
         new_status = not current_status
     else:
         new_status = False
     
-    status_ref.set({'is_active': new_status})
+    # Update global status
+    global_status_ref.set({'is_active': new_status})
+    
+    # Update status for each team
+    for buyer in buyers_ref:
+        team_name = buyer.id
+        team_status_ref = db.collection('marketplace_status').document(team_name)
+        team_status_ref.set({'is_active': new_status})
     
     if new_status:
         print_colored("Marketplace has been started. Customers can now make transactions.", Fore.GREEN)
@@ -227,6 +238,18 @@ def toggle_team_marketplace_status():
     else:
         print_colored(f"Marketplace access for team '{team_name}' has been disabled.", Fore.YELLOW)
 
+def set_sabotage_cost():
+    try:
+        cost = float(input("Enter the cost for sabotage: "))
+        if cost < 0:
+            raise ValueError("Cost cannot be negative")
+        
+        # Set the sabotage cost in Firestore
+        db.collection('game_settings').document('sabotage').set({'cost': cost})
+        print_colored(f"Sabotage cost set to {cost} TOS.", Fore.GREEN)
+    except ValueError as e:
+        print_colored(f"Invalid input: {str(e)}", Fore.RED)
+
 
 def main():
     Iste_logo()
@@ -244,7 +267,8 @@ def main():
         print("10. View Sabotage Attempts")
         print("11. Remove Sabotage")
         print("12. Toggle Team Marketplace Status")
-        print("13. Exit")
+        print("13. Set Sabotage Cost")  # New option
+        print("14. Exit")
         
         choice = input(Fore.CYAN + "Choose an option: " + Style.RESET_ALL)
         
@@ -272,7 +296,10 @@ def main():
             remove_sabotage()
         elif choice == '12':
             toggle_team_marketplace_status()
+         # ... (previous options remain the same)
         elif choice == '13':
+            set_sabotage_cost()
+        elif choice == '14':
             break
         else:
             print_colored("Invalid choice, please try again.", Fore.RED)
