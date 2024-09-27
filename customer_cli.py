@@ -28,8 +28,8 @@ cred = credentials.Certificate(firebase_credentials)
 firebase_admin.initialize_app(cred)
 db = firestore.client()
 
-def check_marketplace_status():
-    status_ref = db.collection('marketplace_status').document('status')
+def check_marketplace_status(team_name):
+    status_ref = db.collection('marketplace_status').document(team_name)
     status_doc = status_ref.get()
     
     if status_doc.exists:
@@ -48,7 +48,7 @@ def verify_customer(name):
                 password = input(Fore.CYAN + "Enter your password: " + Style.RESET_ALL)
                 if password == password_doc.to_dict()['password']:
                     balance = doc.to_dict().get('balance', 0)
-                    print(f"{Fore.GREEN}Customer{Style.RESET_ALL} {name} {Fore.GREEN}verified. Balance:{Style.RESET_ALL} {balance}TOS.")
+                    print(f"{Fore.GREEN}Customer{Style.RESET_ALL} {name} {Fore.GREEN}verified. Balance:{Style.RESET_ALL} {balance} TOS.")
                     return balance
                 else:
                     print_colored("Invalid password. Please try again.", Fore.RED)
@@ -57,15 +57,15 @@ def verify_customer(name):
             password = input(Fore.CYAN + "Create a password: " + Style.RESET_ALL)
             password_ref.set({'password': password})
             balance = doc.to_dict().get('balance', 0)
-            print(f"{Fore.GREEN}Customer{Style.RESET_ALL} {name} {Fore.GREEN}verified. Balance:{Style.RESET_ALL} {balance}TOS.")
+            print(f"{Fore.GREEN}Customer{Style.RESET_ALL} {name} {Fore.GREEN}verified. Balance:{Style.RESET_ALL} {balance} TOS.")
             return balance
     else:
         print_colored(f"Customer '{name}' not found.", Fore.RED)
         return None
     
-def view_items():
-    if not check_marketplace_status():
-        print_colored("The marketplace is currently closed. Please try again later.", Fore.YELLOW)
+def view_items(team_name):
+    if not check_marketplace_status(team_name):
+        print_colored("The marketplace is currently closed for your team. Please try again later.", Fore.YELLOW)
         return {}
     items = db.collection('items').stream()
     if not items:
@@ -81,14 +81,14 @@ def view_items():
                 'quantity': item_data['quantity'],
                 'price': item_data['price']
             }
-            print_colored(f"{index}. {Fore.GREEN}\tItem name:{Style.RESET_ALL} {item.id}{Fore.GREEN},\tQuantity:{Style.RESET_ALL} {item_data['quantity']}{Fore.GREEN},\tPrice: {Style.RESET_ALL}{item_data['price']}TOS each.")
+            print_colored(f"{index}. {Fore.GREEN}\tItem name:{Style.RESET_ALL} {item.id}{Fore.GREEN},\tQuantity:{Style.RESET_ALL} {item_data['quantity']}{Fore.GREEN},\tPrice: {Style.RESET_ALL}{item_data['price']} TOS each.")
         return item_dict
 
 def purchase_item(name):
-    if not check_marketplace_status():
-        print_colored("The marketplace is currently closed. Purchases are not allowed at this time.", Fore.YELLOW)
+    if not check_marketplace_status(name):
+        print_colored("The marketplace is currently closed for your team. Purchases are not allowed at this time.", Fore.YELLOW)
         return
-    item_dict = view_items()
+    item_dict = view_items(name)  # Pass the team_name here
     if not item_dict:
         return
 
@@ -161,8 +161,8 @@ def purchase_item(name):
             'total_price': total_price
         })
     
-    print_colored(f"{Fore.GREEN}Purchased 1 unit of{Style.RESET_ALL} '{item_name}' {Fore.GREEN}for{Style.RESET_ALL} {total_price}TOS.")
-    print_colored(f"{Fore.YELLOW}Remaining balance:{Style.RESET_ALL} {customer_data['balance'] - total_price}TOS.")
+    print_colored(f"{Fore.GREEN}Purchased 1 unit of{Style.RESET_ALL} '{item_name}' {Fore.GREEN}for{Style.RESET_ALL} {total_price} TOS.")
+    print_colored(f"{Fore.YELLOW}Remaining balance:{Style.RESET_ALL} {customer_data['balance'] - total_price} TOS.")
 
 def view_purchases(name):
     # Query Firestore for the customer's purchases
@@ -180,16 +180,104 @@ def view_purchases(name):
     print_colored("Purchase history:", Fore.GREEN)
     for purchase in purchases:
         purchase_data = purchase.to_dict()
-        print(f"{Fore.GREEN}Item:{Style.RESET_ALL} {purchase_data['item']}{Fore.GREEN},\tQuantity:{Style.RESET_ALL} {purchase_data['quantity']}{Fore.GREEN},\tTotal Price:{Style.RESET_ALL} {purchase_data['total_price']}TOS")
+        print(f"{Fore.GREEN}Item:{Style.RESET_ALL} {purchase_data['item']}{Fore.GREEN},\tQuantity:{Style.RESET_ALL} {purchase_data['quantity']}{Fore.GREEN},\tTotal Price:{Style.RESET_ALL} {purchase_data['total_price']} TOS")
 
 def check_balance(name):
     customer_ref = db.collection('approved_buyers').document(name)
     doc = customer_ref.get()
     if doc.exists:
         balance = doc.to_dict().get('balance', 0)
-        print_colored(f"{Fore.GREEN}Your current balance is:{Style.RESET_ALL} {balance}TOS.")
+        print_colored(f"{Fore.GREEN}Your current balance is:{Style.RESET_ALL} {balance} TOS.")
     else:
         print_colored(f"Customer '{name}' not found.", Fore.RED)
+
+def view_sabotage_options():
+    sabotage_ref = db.collection('sabotage_options').stream()
+    options = list(sabotage_ref)
+    
+    if not options:
+        print_colored("No sabotage options available.", Fore.YELLOW)
+        return None
+
+    print_colored("Available sabotage options:", Fore.CYAN)
+    for index, option in enumerate(options, start=1):
+        option_data = option.to_dict()
+        print(f"{index}. {option_data['name']} - Cost: {option_data['cost']} TOS")
+    
+    while True:
+        try:
+            choice = int(input(Fore.CYAN + "Enter the number of the sabotage option (0 to cancel): " + Style.RESET_ALL))
+            if choice == 0:
+                return None
+            if 1 <= choice <= len(options):
+                return options[choice - 1]
+            else:
+                print_colored("Invalid choice. Please try again.", Fore.RED)
+        except ValueError:
+            print_colored("Please enter a valid number.", Fore.RED)
+
+def perform_sabotage(customer_name):
+    option = view_sabotage_options()
+    if not option:
+        return
+
+    option_data = option.to_dict()
+    cost = option_data['cost']
+
+    target_team = input(Fore.CYAN + "Enter the team name you want to sabotage: " + Style.RESET_ALL)
+    
+    # Check if the target team exists
+    target_team_ref = db.collection('approved_buyers').document(target_team)
+    if not target_team_ref.get().exists:
+        print_colored(f"Team '{target_team}' does not exist.", Fore.RED)
+        return
+
+    customer_ref = db.collection('approved_buyers').document(customer_name)
+    customer_doc = customer_ref.get()
+
+    if not customer_doc.exists:
+        print_colored("Customer not found.", Fore.RED)
+        return
+
+    customer_data = customer_doc.to_dict()
+    balance = customer_data.get('balance', 0)
+
+    if balance < cost:
+        print_colored(f"Insufficient balance. You need {cost} TOS for this sabotage.", Fore.RED)
+        return
+
+    # Deduct the cost from the customer's balance
+    new_balance = balance - cost
+    customer_ref.update({'balance': new_balance})
+
+    # Record the sabotage attempt
+    db.collection('sabotage_attempts').add({
+        'customer': customer_name,
+        'target_team': target_team,
+        'sabotage_option': option_data['name'],
+        'cost': cost,
+        'timestamp': firestore.SERVER_TIMESTAMP,
+        'status': 'active'
+    })
+
+    # Disable the target team's marketplace access
+    db.collection('marketplace_status').document(target_team).set({'is_active': False})
+
+    print_colored(f"Sabotage '{option_data['name']}' initiated against team '{target_team}'. {cost} TOS deducted from your balance.", Fore.GREEN)
+    print_colored(f"New balance: {new_balance} TOS", Fore.YELLOW)
+    print_colored("Please contact tech support to complete the sabotage action.", Fore.CYAN)
+
+def view_sabotage_attempts():
+    attempts = db.collection('sabotage_attempts').order_by('timestamp', direction=Query.DESCENDING).stream()
+    if not attempts:
+        print_colored("No sabotage attempts found.", Fore.YELLOW)
+        return
+
+    print_colored("Sabotage attempts:", Fore.CYAN)
+    for attempt in attempts:
+        attempt_data = attempt.to_dict()
+        print(f"Customer: {attempt_data['customer']}, Option: {attempt_data['sabotage_option']}, "
+              f"Cost: {attempt_data['cost']} TOS, Time: {attempt_data['timestamp']}")
 
 # ... (rest of the code remains the same)
 def print_colored(text, color=Fore.WHITE, style=Style.NORMAL):
@@ -222,17 +310,21 @@ def main():
                 print_colored("Your team is not on the approved list. Contact admin for access.", Fore.RED)
                 continue
         else:
-            # Show the menu and perform actions
+            if not check_marketplace_status(customer_name):
+                print_colored(f"Your team has been sabotaged. Please contact tech support.", Fore.RED)
+                break
+
             print_colored("\nCustomer CLI", Fore.CYAN, Style.BRIGHT)
             print("1. View Items")
             print("2. Purchase Item")
             print("3. View Purchases")
             print("4. Check Balance")
-            print("5. Exit\n")
+            print("5. Sabotage")
+            print("6. Exit\n")
             choice = input(Fore.CYAN + "Choose an option: " + Style.RESET_ALL)
 
             if choice == '1':
-                view_items()
+                view_items(customer_name)
             elif choice == '2':
                 purchase_item(customer_name)
             elif choice == '3':
@@ -240,6 +332,8 @@ def main():
             elif choice == '4':
                 check_balance(customer_name)
             elif choice == '5':
+                perform_sabotage(customer_name)
+            elif choice == '6':
                 break
             else:
                 print_colored("Invalid choice, please try again.", Fore.RED)

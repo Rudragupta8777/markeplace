@@ -1,6 +1,12 @@
 import firebase_admin
 from firebase_admin import credentials, firestore
 from colorama import init, Fore, Style
+from google.cloud.firestore import Query
+
+import warnings
+init(autoreset=True)
+# Suppress UserWarning from Firestore's where() method
+warnings.filterwarnings("ignore", category=UserWarning)
 
 # Embed your Firebase credentials directly in the code
 firebase_credentials = {
@@ -33,7 +39,7 @@ def add_or_update_approved_buyer():
     
     # Update or add buyer data in Firestore
     update_or_add_buyer(name, balance)
-    print(f"Buyer '{name}' updated with balance {balance}TOS.")
+    print(f"Buyer '{name}' updated with balance {balance} TOS.")
 
 def update_or_add_buyer(name, balance):
     buyer_ref = db.collection('approved_buyers').document(name)
@@ -50,7 +56,7 @@ def list_item():
 
     item_ref = db.collection('items').document(item_name)
     item_ref.set({'quantity': quantity, 'price': price}, merge=True)
-    print(f"Item '{item_name}' listed with {quantity} units at {price}TOS each.")
+    print(f"Item '{item_name}' listed with {quantity} units at {price} TOS each.")
 
 def view_items():
     items = db.collection('items').stream()
@@ -60,7 +66,7 @@ def view_items():
         print("Items available:")
         for item in items:
             item_data = item.to_dict()
-            print(f"{item.id}: {item_data['quantity']} available at {item_data['price']}TOS each.")
+            print(f"{item.id}: {item_data['quantity']} available at {item_data['price']} TOS each.")
 
 def update_item():
     item_name = input("Enter item name: ")
@@ -90,7 +96,7 @@ def view_buyers():
     for buyer in buyers:
         buyer_data = buyer.to_dict()
         balance = buyer_data.get('balance', 'N/A')
-        print(f"Team Name : {buyer.id}, \tBalance : {balance}TOS.")
+        print(f"Team Name : {buyer.id}, \tBalance : {balance} TOS.")
 
 def view_all_purchases():
     purchases = db.collection('purchases').stream()
@@ -102,7 +108,7 @@ def view_all_purchases():
     for purchase in purchases:
         purchase_data = purchase.to_dict()
         print(f"Customer: {purchase_data['customer']}, \tItem: {purchase_data['item']}, "
-              f"\tQuantity: {purchase_data['quantity']}, \tTotal Price: {purchase_data['total_price']}TOS")
+              f"\tQuantity: {purchase_data['quantity']}, \tTotal Price: {purchase_data['total_price']} TOS")
 
 def print_colored(text, color=Fore.WHITE, style=Style.NORMAL):
     print(f"{style}{color}{text}{Style.RESET_ALL}")
@@ -134,6 +140,94 @@ def Iste_logo():
                 ╚═╝ ╚══════╝    ╚═╝    ╚══════╝
                                              ''')
 
+def add_sabotage_option():
+    name = input("Enter the sabotage option name: ")
+    try:
+        cost = float(input("Enter the cost of the sabotage option: "))
+    except ValueError:
+        print_colored("Invalid cost. Please enter a numeric value.", Fore.RED)
+        return
+
+    sabotage_ref = db.collection('sabotage_options').document(name)
+    sabotage_ref.set({'name': name, 'cost': cost})
+    print_colored(f"Sabotage option '{name}' added with cost {cost} TOS.", Fore.GREEN)
+
+def view_sabotage_options():
+    options = db.collection('sabotage_options').stream()
+    if not options:
+        print_colored("No sabotage options available.", Fore.YELLOW)
+        return
+
+    print_colored("Sabotage options:", Fore.CYAN)
+    for option in options:
+        option_data = option.to_dict()
+        print(f"{option_data['name']} - Cost: {option_data['cost']} TOS")
+
+def view_sabotage_attempts():
+    attempts = db.collection('sabotage_attempts').order_by('timestamp', direction=Query.DESCENDING).stream()
+    if not attempts:
+        print_colored("No sabotage attempts found.", Fore.YELLOW)
+        return
+
+    print_colored("Sabotage attempts:", Fore.CYAN)
+    for attempt in attempts:
+        attempt_data = attempt.to_dict()
+        # Ensure all keys are present before accessing
+        customer = attempt_data.get('customer', 'N/A')
+        target_team = attempt_data.get('target_team', 'N/A')
+        sabotage_option = attempt_data.get('sabotage_option', 'N/A')
+        cost = attempt_data.get('cost', 'N/A')
+        timestamp = attempt_data.get('timestamp', 'N/A')
+        status = attempt_data.get('status', 'N/A')
+
+        print(f"Customer: {customer}, Target: {target_team}, Option: {sabotage_option}, "
+              f"Cost: {cost} TOS, Time: {timestamp}, Status: {status}\n")
+
+def remove_sabotage():
+    target_team = input("Enter the team name to remove sabotage from: ")
+    
+    # Check if the target team exists
+    target_team_ref = db.collection('approved_buyers').document(target_team)
+    if not target_team_ref.get().exists:
+        print_colored(f"Team '{target_team}' does not exist.", Fore.RED)
+        return
+
+    # Re-enable the target team's marketplace access
+    db.collection('marketplace_status').document(target_team).set({'is_active': True})
+
+    # Update all active sabotage attempts for this team to 'resolved'
+    sabotage_query = db.collection('sabotage_attempts').where('target_team', '==', target_team).where('status', '==', 'active')
+    for attempt in sabotage_query.stream():
+        attempt.reference.update({'status': 'resolved'})
+
+    print_colored(f"Sabotage removed from team '{target_team}'. Their marketplace access has been restored.", Fore.GREEN)
+
+def toggle_team_marketplace_status():
+    team_name = input("Enter the team name to toggle marketplace status: ")
+    
+    # Check if the team exists
+    team_ref = db.collection('approved_buyers').document(team_name)
+    if not team_ref.get().exists:
+        print_colored(f"Team '{team_name}' does not exist.", Fore.RED)
+        return
+
+    status_ref = db.collection('marketplace_status').document(team_name)
+    status_doc = status_ref.get()
+    
+    if status_doc.exists:
+        current_status = status_doc.to_dict().get('is_active', True)
+        new_status = not current_status
+    else:
+        new_status = False
+    
+    status_ref.set({'is_active': new_status})
+    
+    if new_status:
+        print_colored(f"Marketplace access for team '{team_name}' has been enabled.", Fore.GREEN)
+    else:
+        print_colored(f"Marketplace access for team '{team_name}' has been disabled.", Fore.YELLOW)
+
+
 def main():
     Iste_logo()
     while True:
@@ -145,7 +239,12 @@ def main():
         print("5. View Approved Buyers")
         print("6. View All Purchases")
         print("7. Toggle Marketplace Status")
-        print("8. Exit")
+        print("8. Add Sabotage Option")
+        print("9. View Sabotage Options")
+        print("10. View Sabotage Attempts")
+        print("11. Remove Sabotage")
+        print("12. Toggle Team Marketplace Status")
+        print("13. Exit")
         
         choice = input(Fore.CYAN + "Choose an option: " + Style.RESET_ALL)
         
@@ -164,6 +263,16 @@ def main():
         elif choice == '7':
             toggle_marketplace_status()
         elif choice == '8':
+            add_sabotage_option()
+        elif choice == '9':
+            view_sabotage_options()
+        elif choice == '10':
+            view_sabotage_attempts()
+        elif choice == '11':
+            remove_sabotage()
+        elif choice == '12':
+            toggle_team_marketplace_status()
+        elif choice == '13':
             break
         else:
             print_colored("Invalid choice, please try again.", Fore.RED)
